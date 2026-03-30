@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { CheckCircle, XCircle, Download, Printer, Plus, HeartPulse, Pencil, Trash2 } from 'lucide-react';
-import { LEAVES, TEAM_MEMBERS, LEAVE_CATEGORY_CONFIG, HEALTH_CHECKS, HEALTH_STATUS_CONFIG, THAI_PUBLIC_HOLIDAYS } from '../data/sampleData';
+import { LEAVES, LEAVE_CATEGORY_CONFIG, HEALTH_CHECKS, HEALTH_STATUS_CONFIG, THAI_PUBLIC_HOLIDAYS } from '../data/sampleData';
 import { exportToExcel, printTable } from '../utils/exportUtils';
 import { AlertTriangle } from 'lucide-react';
 import { useLocalStorage } from '../utils/useLocalStorage';
+import { useMembers } from '../context/MembersContext';
 
 const STATUS_LABELS = { approved: '✅ อนุมัติ', pending: '⏳ รออนุมัติ', rejected: '❌ ไม่อนุมัติ' };
 const STATUS_COLORS = {
@@ -13,6 +14,8 @@ const STATUS_COLORS = {
 };
 
 export default function LeaveManagement() {
+  const { members } = useMembers();
+  const activeMembers = members.filter(m => (m.employmentStatus || 'active') !== 'resigned');
   const [tab, setTab] = useState('leave');
   const [leaves, setLeaves] = useLocalStorage('paperless_leaves', LEAVES);
   const [filter, setFilter] = useState('all');
@@ -25,17 +28,25 @@ export default function LeaveManagement() {
   const [checks, setChecks] = useLocalStorage('paperless_health_checks', HEALTH_CHECKS);
   const [healthYear, setHealthYear] = useState(new Date().getFullYear());
 
-  const handleHealthStatusChange = (staffId, status) => {
-    setChecks(prev => prev.map(h => h.staffId === staffId ? { ...h, status } : h));
+  const handleHealthStatusChange = (staffId, year, status) => {
+    setChecks(prev => prev.map(h => (h.staffId === staffId && h.year === year) ? { ...h, status } : h));
   };
 
-  const handleHealthDateChange = (staffId, date) => {
-    setChecks(prev => prev.map(h => h.staffId === staffId ? { ...h, date } : h));
+  const handleHealthDateChange = (staffId, year, date) => {
+    setChecks(prev => prev.map(h => (h.staffId === staffId && h.year === year) ? { ...h, date } : h));
+  };
+
+  const handleAddHealthYear = (year) => {
+    const existing = new Set(checks.filter(h => h.year === year).map(h => h.staffId));
+    const newRecords = activeMembers
+      .filter(m => !existing.has(m.code))
+      .map(m => ({ staffId: m.code, year, status: 'pending', date: null, doc: null, remark: '' }));
+    if (newRecords.length > 0) setChecks(prev => [...prev, ...newRecords]);
   };
 
   const handleHealthExport = () => {
     const data = checks.map(h => {
-      const member = TEAM_MEMBERS.find(t => t.code === h.staffId);
+      const member = members.find(t => t.code === h.staffId);
       return {
         'รหัส': h.staffId, 'ชื่อ': member?.name, 'ตำแหน่ง': member?.role,
         'ปี': h.year, 'สถานะ': HEALTH_STATUS_CONFIG[h.status]?.label,
@@ -95,7 +106,7 @@ export default function LeaveManagement() {
   };
 
   const handleSubmit = () => {
-    const member = TEAM_MEMBERS.find(t => t.code === form.staffId);
+    const member = members.find(t => t.code === form.staffId);
     if (!member) return;
     if (editMode) {
       setLeaves(prev => prev.map(l => l.id === editingId
@@ -194,7 +205,7 @@ export default function LeaveManagement() {
       {tab === 'health' && (
         <div className="space-y-5">
           {/* Year switcher */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => setHealthYear(y => y - 1)}
               className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm hover:bg-slate-50">‹</button>
             <span className="text-sm font-semibold text-slate-700 min-w-16 text-center">ปี {healthYear}</span>
@@ -204,6 +215,11 @@ export default function LeaveManagement() {
               className="ml-2 px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white">
               {healthYears.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
+            <button
+              onClick={() => handleAddHealthYear(healthYear)}
+              className="ml-2 flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700">
+              <Plus size={14} /> เพิ่มรายชื่อปี {healthYear}
+            </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 text-center">
@@ -247,9 +263,9 @@ export default function LeaveManagement() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredChecks.map(h => {
-                  const member = TEAM_MEMBERS.find(t => t.code === h.staffId);
+                  const member = members.find(t => t.code === h.staffId);
                   return (
-                    <tr key={h.staffId} className={`hover:bg-slate-50 transition-colors ${h.status === 'not_done' ? 'bg-red-50/30' : ''}`}>
+                    <tr key={`${h.staffId}-${h.year}`} className={`hover:bg-slate-50 transition-colors ${h.status === 'not_done' ? 'bg-red-50/30' : ''}`}>
                       <td className="px-4 py-3">
                         <div className="font-medium text-slate-800">{member?.name}</div>
                         <div className="text-xs text-slate-400">{member?.nickname}</div>
@@ -265,13 +281,13 @@ export default function LeaveManagement() {
                         <input
                           type="date"
                           value={h.date || ''}
-                          onChange={e => handleHealthDateChange(h.staffId, e.target.value)}
+                          onChange={e => handleHealthDateChange(h.staffId, h.year, e.target.value)}
                           className="text-xs border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-600"
                         />
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500">{h.remark || '—'}</td>
                       <td className="px-4 py-3">
-                        <select value={h.status} onChange={e => handleHealthStatusChange(h.staffId, e.target.value)}
+                        <select value={h.status} onChange={e => handleHealthStatusChange(h.staffId, h.year, e.target.value)}
                           className="text-xs border border-slate-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500">
                           <option value="completed">ตรวจแล้ว</option>
                           <option value="pending">รอตรวจ</option>
@@ -395,7 +411,7 @@ export default function LeaveManagement() {
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
         <h3 className="font-semibold text-slate-700 mb-4">สรุปการลาต่อคน (ปี 2026)</h3>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          {TEAM_MEMBERS.map(member => {
+          {activeMembers.map(member => {
             const memberLeaves = leaves.filter(l => l.staffId === member.code && l.status !== 'rejected');
             const totalDays = memberLeaves.reduce((s, l) => s + l.days, 0);
             return (
@@ -424,7 +440,7 @@ export default function LeaveManagement() {
                 <select value={form.staffId} onChange={e => setForm({...form, staffId: e.target.value})}
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">เลือกพนักงาน</option>
-                  {TEAM_MEMBERS.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
+                  {activeMembers.map(m => <option key={m.code} value={m.code}>{m.name}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -484,7 +500,7 @@ export default function LeaveManagement() {
                 <select value={form.substitute} onChange={e => setForm({...form, substitute: e.target.value})}
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                   <option value="">— ไม่มีผู้ปฏิบัติงานแทน —</option>
-                  {TEAM_MEMBERS.filter(m => m.code !== form.staffId).map(m => (
+                  {activeMembers.filter(m => m.code !== form.staffId).map(m => (
                     <option key={m.code} value={m.name}>{m.name} ({m.nickname})</option>
                   ))}
                 </select>
