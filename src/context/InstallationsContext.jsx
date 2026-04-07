@@ -5,7 +5,7 @@ import { useLocalStorage } from '../utils/useLocalStorage';
 const InstallationsContext = createContext(null);
 
 export function InstallationsProvider({ children }) {
-  const [installations, setInstallations] = useLocalStorage('paperless_installations', INSTALLATIONS);
+  const [installations, setInstallations] = useLocalStorage('paperless_installations_v2', INSTALLATIONS);
 
   const addInstallation = (item) => setInstallations(prev => [...prev, item]);
   const updateInstallation = (id, updates) =>

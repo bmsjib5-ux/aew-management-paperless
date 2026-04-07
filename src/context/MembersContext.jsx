@@ -5,7 +5,7 @@ import { useLocalStorage } from '../utils/useLocalStorage';
 const MembersContext = createContext(null);
 
 export function MembersProvider({ children }) {
-  const [members, setMembers] = useLocalStorage('paperless_members', TEAM_MEMBERS);
+  const [members, setMembers] = useLocalStorage('paperless_members_v2', TEAM_MEMBERS);
 
   const addMember = (member) => setMembers(prev => [...prev, member]);
   const updateMember = (id, updates) =>

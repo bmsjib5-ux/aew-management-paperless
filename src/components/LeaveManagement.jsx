@@ -17,7 +17,7 @@ export default function LeaveManagement() {
   const { members } = useMembers();
   const activeMembers = members.filter(m => (m.employmentStatus || 'active') !== 'resigned');
   const [tab, setTab] = useState('leave');
-  const [leaves, setLeaves] = useLocalStorage('paperless_leaves', LEAVES);
+  const [leaves, setLeaves] = useLocalStorage('paperless_leaves_v2', LEAVES);
   const [filter, setFilter] = useState('all');
   const [leaveYear, setLeaveYear] = useState('all');
   const [showForm, setShowForm] = useState(false);
@@ -25,7 +25,7 @@ export default function LeaveManagement() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ staffId: '', startDate: '', endDate: '', days: 1, category: 'vacation', type: 'ลาพักร้อน', details: '', substitute: '' });
   // Health check state
-  const [checks, setChecks] = useLocalStorage('paperless_health_checks', HEALTH_CHECKS);
+  const [checks, setChecks] = useLocalStorage('paperless_health_checks_v2', HEALTH_CHECKS);
   const [healthYear, setHealthYear] = useState(new Date().getFullYear());
 
   const handleHealthStatusChange = (staffId, year, status) => {
