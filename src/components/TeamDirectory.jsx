@@ -30,6 +30,7 @@ const EMPTY_MEMBER_FORM = {
   gender: '', canDrive: '', religion: '', photo: '',
   lineId: '', lineNotifyToken: '',
   employmentStatus: 'active',
+  teamId: '',
 };
 
 const GENDER_ICON = {
@@ -129,6 +130,7 @@ export default function TeamDirectory() {
       lineId: member.lineId || '',
       lineNotifyToken: member.lineNotifyToken || '',
       employmentStatus: member.employmentStatus || 'active',
+      teamId: member.teamId || '',
     });
     setEditMode(true);
     setEditingId(member.id);
@@ -728,7 +730,17 @@ export default function TeamDirectory() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-slate-600 mb-1 block">สังกัด</label>
+                    <label className="text-xs font-medium text-slate-600 mb-1 block">สังกัดทีม (หัวหน้าทีม)</label>
+                    <select value={form.teamId} onChange={e => setForm({...form, teamId: e.target.value})}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white">
+                      <option value="">— ไม่ระบุทีม —</option>
+                      {members.filter(m => m.role === 'Leader Team').map(l => (
+                        <option key={l.code} value={l.code}>ทีม {l.nickname} ({l.name.split(' ')[0]})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-600 mb-1 block">สังกัด (Dept)</label>
                     <input value={form.dept} onChange={e => setForm({...form, dept: e.target.value})}
                       className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none" />
                   </div>

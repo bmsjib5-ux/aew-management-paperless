@@ -56,33 +56,33 @@ export default function OrgChart() {
   const { members } = useMembers();
   const active = members.filter(m => (m.employmentStatus || 'active') !== 'resigned');
 
-  const pmList      = active.filter(m => m.role === 'PM');
-  const leaderList  = active.filter(m => m.role === 'Leader Team');
-  const specList    = active.filter(m => m.role === 'Special Lead');
-  const staffList   = active.filter(m => ['Specialist', 'Support'].includes(m.role));
+  const pmList     = active.filter(m => m.role === 'PM');
+  const leaderList = active.filter(m => m.role === 'Leader Team');
 
-  // Roles that appear in the "Others" bottom section
-  const mainRoles = new Set(['PM', 'Leader Team', 'Special Lead', 'Specialist', 'Support']);
-  const otherMembers = active.filter(m => !mainRoles.has(m.role));
-
-  // Group other members by role for display
-  const otherGroups = [];
-  otherMembers.forEach(m => {
-    const existing = otherGroups.find(g => g.role === m.role);
-    if (existing) existing.members.push(m);
-    else otherGroups.push({ role: m.role, members: [m] });
-  });
-
-  // Build team columns: each leader gets specLeads[i] and staff chunk of 3
-  const teamCount = leaderList.length || 1;
-  const teams = leaderList.map((leader, i) => ({
+  // Build team columns: each leader gets members whose teamId matches leader.code
+  const teams = leaderList.map(leader => ({
     leader,
-    specLead: specList[i] || null,
-    staff: staffList.slice(i * 3, i * 3 + 3),
+    members: active.filter(m => m.teamId === leader.code),
   }));
 
-  // If no leaders defined, just show a flat sub-level
+  // Members not assigned to any team and not PM/Leader
+  const assignedCodes = new Set([
+    ...leaderList.map(l => l.code),
+    ...pmList.map(p => p.code),
+    ...active.filter(m => m.teamId).map(m => m.code),
+  ]);
+  const unassigned = active.filter(m => !assignedCodes.has(m.code) && m.role !== 'PM' && m.role !== 'Leader Team');
+
+  // Group unassigned by role
+  const unassignedGroups = [];
+  unassigned.forEach(m => {
+    const existing = unassignedGroups.find(g => g.role === m.role);
+    if (existing) existing.members.push(m);
+    else unassignedGroups.push({ role: m.role, members: [m] });
+  });
+
   const hasHierarchy = leaderList.length > 0;
+  const teamCount = leaderList.length || 1;
 
   return (
     <div className="p-6 space-y-6">
@@ -140,34 +140,38 @@ export default function OrgChart() {
               />
               {/* Leader cards with vertical drops */}
               <div className="flex w-full justify-around">
-                {teams.map(team => (
-                  <div key={team.leader.id} className="flex flex-col items-center" style={{ flex: 1 }}>
-                    <VLine h="h-6" />
-                    <MemberCard member={team.leader} size="md" />
+                {teams.map(team => {
+                  // Group team members by role
+                  const roleGroups = [];
+                  team.members.forEach(m => {
+                    const existing = roleGroups.find(g => g.role === m.role);
+                    if (existing) existing.members.push(m);
+                    else roleGroups.push({ role: m.role, members: [m] });
+                  });
+                  return (
+                    <div key={team.leader.id} className="flex flex-col items-center" style={{ flex: 1 }}>
+                      <VLine h="h-6" />
+                      <MemberCard member={team.leader} size="md" />
 
-                    {/* ── Special Lead ── */}
-                    {team.specLead && (
-                      <>
-                        <VLine h="h-4" />
-                        <div className={`text-xs font-semibold px-2 py-0.5 rounded-full mb-1 ${ROLE_CONFIG['Special Lead']?.color || 'bg-cyan-100 text-cyan-700'}`}>
-                          {ROLE_CONFIG['Special Lead']?.icon} Special Lead
+                      {/* ── Team Members grouped by role ── */}
+                      {roleGroups.map(grp => (
+                        <div key={grp.role} className="flex flex-col items-center w-full">
+                          <VLine h="h-4" />
+                          <div className={`text-xs font-semibold px-2 py-0.5 rounded-full mb-1 ${ROLE_CONFIG[grp.role]?.color || 'bg-slate-100 text-slate-600'}`}>
+                            {ROLE_CONFIG[grp.role]?.icon} {ROLE_CONFIG[grp.role]?.label || grp.role} ({grp.members.length})
+                          </div>
+                          <div className="flex flex-col gap-2 items-center">
+                            {grp.members.map(s => <MemberCard key={s.id} member={s} size="md" />)}
+                          </div>
                         </div>
-                        <MemberCard member={team.specLead} size="md" />
-                      </>
-                    )}
+                      ))}
 
-                    {/* ── Staff ── */}
-                    {team.staff.length > 0 && (
-                      <>
-                        <VLine h="h-4" />
-                        <div className="text-xs font-semibold text-slate-400 mb-1">Staff ({team.staff.length})</div>
-                        <div className="flex flex-col gap-2 items-center">
-                          {team.staff.map(s => <MemberCard key={s.id} member={s} size="md" />)}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
+                      {team.members.length === 0 && (
+                        <div className="mt-3 text-xs text-slate-300 italic">ยังไม่มีสมาชิก</div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </>
@@ -200,12 +204,12 @@ export default function OrgChart() {
           </>
         )}
 
-        {/* ── Others / IM เสริม / Remaining ── */}
-        {otherGroups.length > 0 && (
+        {/* ── ยังไม่ได้กำหนดทีม ── */}
+        {unassignedGroups.length > 0 && (
           <div className="mt-8 pt-6 border-t border-slate-100">
-            <div className="text-xs font-semibold text-slate-400 mb-4 text-center uppercase tracking-wide">อื่น ๆ / IM เสริม</div>
+            <div className="text-xs font-semibold text-slate-400 mb-4 text-center uppercase tracking-wide">ยังไม่ได้กำหนดทีม</div>
             <div className="flex flex-wrap gap-6 justify-center">
-              {otherGroups.map(g => {
+              {unassignedGroups.map(g => {
                 const cfg = ROLE_CONFIG[g.role];
                 return (
                   <div key={g.role} className="flex flex-col items-center gap-2">
